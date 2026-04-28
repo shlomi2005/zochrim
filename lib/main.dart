@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'screens/dedication_splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/notification_service.dart';
 import 'services/preferences_service.dart';
@@ -57,13 +58,8 @@ Future<void> _bootstrapBackground() async {
   } catch (e) {
     debugPrint("notif init err: $e");
   }
-  try {
-    if (await PreferencesService.isFirstLaunch()) {
-      await PreferencesService.markFirstLaunchDone();
-    }
-  } catch (e) {
-    debugPrint("prefs err: $e");
-  }
+  // הסימון של "פעם ראשונה הושלמה" קורה ב-DedicationSplashScreen אחרי
+  // שהמסך באמת נצפה — לא כאן, כדי לא לאבד אותו במרוץ עם ה-UI.
 }
 
 class OmerApp extends StatelessWidget {
@@ -82,7 +78,7 @@ class OmerApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const HomeScreen(),
+      home: const _RootRouter(),
       builder: (context, child) {
         return Directionality(
           textDirection: TextDirection.rtl,
@@ -90,5 +86,48 @@ class OmerApp extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// בוחר אם להראות הקדשה (פעם ראשונה) או ישר את HomeScreen.
+class _RootRouter extends StatefulWidget {
+  const _RootRouter();
+
+  @override
+  State<_RootRouter> createState() => _RootRouterState();
+}
+
+class _RootRouterState extends State<_RootRouter> {
+  Widget? _child;
+
+  @override
+  void initState() {
+    super.initState();
+    _decide();
+  }
+
+  Future<void> _decide() async {
+    bool isFirst = false;
+    try {
+      isFirst = await PreferencesService.isFirstLaunch();
+    } catch (e) {
+      debugPrint("first-launch check err: $e");
+    }
+    if (!mounted) return;
+    setState(() {
+      _child = isFirst
+          ? const DedicationSplashScreen()
+          : const HomeScreen();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // עד שמסיימים את ה-check — רקע ריק כדי לא להבהב.
+    return _child ??
+        const Scaffold(
+          backgroundColor: AppColors.bgDeep,
+          body: SizedBox.shrink(),
+        );
   }
 }

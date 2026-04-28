@@ -1,4 +1,6 @@
+import '../models/city_preset.dart';
 import '../models/omer_day.dart';
+import 'halachic_clock.dart';
 
 /// שירות לחישוב יום הספירה הנוכחי ולהמרה בין "יום עומר" לתאריך לועזי.
 ///
@@ -7,10 +9,13 @@ import '../models/omer_day.dart';
 ///   - ערב יום 49: ליל ד', 20 במאי 2026
 ///   - שבועות: ליל ה', 21 במאי 2026
 ///
-/// מודל: כל "יום עומר" מתחיל בערב של תאריך לועזי מסוים, אחרי 20:00 (צאת הכוכבים).
-/// הערב הזה "שייך" לתאריך הלועזי שלפניו - ומכאן `firstOmerNight = 2/4/2026`.
+/// מודל: כל "יום עומר" מתחיל בערב של תאריך לועזי מסוים, אחרי צאת הכוכבים.
+/// הערב הזה "שייך" לתאריך הלועזי שלפניו — ומכאן `firstOmerNight = 2/4/2026`.
+///
+/// כש-`city` מועברת, גבול היום נקבע לפי צאת הכוכבים האמיתי בעיר.
+/// בלי `city`, נופלים חזרה ל-fallback של 20:00 (לקוד ישן/בדיקות).
 class OmerService {
-  /// התאריך הלועזי שבערבו (אחרי 20:00) מתחילה ספירת יום 1.
+  /// התאריך הלועזי שבערבו (אחרי צאת הכוכבים) מתחילה ספירת יום 1.
   static final DateTime firstOmerNight = DateTime(2026, 4, 2);
 
   /// alias שימושי לקוד ישן
@@ -20,23 +25,24 @@ class OmerService {
   static DateTime get lastOmerNight =>
       firstOmerNight.add(const Duration(days: 48));
 
-  /// השעה שממנה והלאה סופרים את הערב הנוכחי (צאת כוכבים משוער)
+  /// fallback בלבד — כשלא מועברת עיר, מניחים שצאת הכוכבים ב-20:00.
   static const int nightfallHour = 20;
 
   /// מחשב את יום העומר הנוכחי לפי [now].
   ///
-  /// לוגיקה: "היום של הערב הפעיל" הוא תאריך הערב שבצאת הכוכבים שלו התחיל היום.
-  /// - אם [now] אחרי 20:00 - הערב הפעיל התחיל בלילה של [now] הנוכחי.
-  /// - אחרת - הערב הפעיל התחיל אתמול בלילה.
-  static OmerDay computeDay([DateTime? now]) {
+  /// - אם הועברה [city]: גבול היום נקבע לפי צאת הכוכבים האמיתי באותה עיר.
+  ///   אחרי צאת = הערב הפעיל התחיל הלילה. לפני צאת = הוא התחיל אתמול.
+  /// - בלי [city]: fallback ל-20:00.
+  static OmerDay computeDay({DateTime? now, CityPreset? city}) {
     now ??= DateTime.now();
 
-    final DateTime currentOmerNight;
-    if (now.hour >= nightfallHour) {
-      currentOmerNight = DateTime(now.year, now.month, now.day);
-    } else {
-      currentOmerNight = DateTime(now.year, now.month, now.day - 1);
-    }
+    final bool nightStartedToday = city != null
+        ? HalachicClock.isAfterTzeit(city, now)
+        : now.hour >= nightfallHour;
+
+    final currentOmerNight = nightStartedToday
+        ? DateTime(now.year, now.month, now.day)
+        : DateTime(now.year, now.month, now.day - 1);
 
     if (currentOmerNight.isBefore(firstOmerNight)) {
       return const OmerDay(beforeOmer: true);
@@ -49,8 +55,8 @@ class OmerService {
   }
 
   /// ימים שנותרו עד לסוף הספירה (49)
-  static int daysRemaining([DateTime? now]) {
-    final od = computeDay(now);
+  static int daysRemaining({DateTime? now, CityPreset? city}) {
+    final od = computeDay(now: now, city: city);
     if (od.beforeOmer) return 49;
     if (od.afterOmer) return 0;
     return 49 - (od.dayNumber ?? 0);

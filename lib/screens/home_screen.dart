@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../data/compliments.dart';
 import '../models/city_preset.dart';
 import '../models/omer_day.dart';
+import '../services/halachic_clock.dart';
 import '../services/jewish_day_service.dart';
 import '../services/notification_service.dart';
 import '../services/omer_service.dart';
@@ -19,6 +20,9 @@ import '../widgets/harachaman_dialog.dart';
 import '../widgets/omer_card.dart';
 import '../widgets/progress_grid.dart';
 import '../widgets/tefillin_card.dart';
+import 'chizuk_consent_screen.dart';
+import 'chizuk_screen.dart';
+import '../services/chizuk_service.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -74,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _reminderMinute = rm;
       _userName = name;
       _city = city;
+      _omerDay = OmerService.computeDay(city: city);
       _jewishDay = JewishDayService(city: city);
       _tefillinDecision = TefillinService.decide(city: city);
       _tefillinDoneToday = tefillinDone;
@@ -183,7 +188,8 @@ class _HomeScreenState extends State<HomeScreen> {
     Overlay.of(context).insert(_overlay!);
   }
 
-  // easter egg: 7 טאפים על הכותרת תוך 3 שניות פותחים אבחון
+  // easter egg: 7 טאפים על הכותרת תוך 3 שניות פותחים "חיזוק יומי".
+  // המסך מכוון לנוער שזקוקים לחיזוק בנושא התגברות עצמית. חבוי בכוונה.
   void _onHeaderTap() {
     final now = DateTime.now();
     if (now.difference(_lastHeaderTap).inSeconds > 3) {
@@ -193,24 +199,22 @@ class _HomeScreenState extends State<HomeScreen> {
     _lastHeaderTap = now;
     if (_headerTapCount >= 7) {
       _headerTapCount = 0;
-      _openDiagnostics();
+      _openChizuk();
     }
   }
 
-  Future<void> _openDiagnostics() async {
-    final diag = await NotificationService.diagnose();
+  Future<void> _openChizuk() async {
+    final consented = await ChizukService.hasConsented();
     if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.bgMid,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (ctx) {
-        return _DiagnosticsSheet(initial: diag);
-      },
-    );
+    if (consented) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ChizukScreen()),
+      );
+    } else {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ChizukConsentScreen()),
+      );
+    }
   }
 
   String _formatTime(int h, int m) =>
@@ -317,10 +321,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           weight: FontWeight.w700,
                           color: AppColors.textPrimary)),
                   const SizedBox(height: 4),
+                  Text(_hebrewDateLine(),
+                      textAlign: TextAlign.center,
+                      style: AppFonts.liturgical(
+                          size: 14,
+                          weight: FontWeight.w600,
+                          color: AppColors.goldSoft,
+                          height: 1.3)),
+                  const SizedBox(height: 2),
                   Text(_dateLine(),
                       textAlign: TextAlign.center,
                       style: AppFonts.ui(
-                          size: 13,
+                          size: 12,
                           color: AppColors.textSecondary,
                           letterSpacing: 0.4)),
                 ],
@@ -341,6 +353,18 @@ class _HomeScreenState extends State<HomeScreen> {
       "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"
     ];
     return "${now.day} ב${months[now.month - 1]} · $cityName";
+  }
+
+  /// תאריך עברי, מודע לשעון ההלכתי — אחרי צאת הכוכבים מתקדם ליום הבא.
+  String _hebrewDateLine() {
+    try {
+      final halachicDate = HalachicClock.halachicToday(_city);
+      final jd = JewishDayService(city: _city, date: halachicDate);
+      return jd.hebrewDateString;
+    } catch (e) {
+      debugPrint("hebrew date err: $e");
+      return "";
+    }
   }
 
   Widget _omerSection() {
@@ -631,238 +655,5 @@ class _ZmanLine {
     final t = time;
     if (t == null) return "—";
     return "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
-  }
-}
-
-/// לוח אבחון להתראות - מוצג דרך showModalBottomSheet.
-class _DiagnosticsSheet extends StatefulWidget {
-  final NotificationDiagnostic initial;
-  const _DiagnosticsSheet({required this.initial});
-
-  @override
-  State<_DiagnosticsSheet> createState() => _DiagnosticsSheetState();
-}
-
-class _DiagnosticsSheetState extends State<_DiagnosticsSheet> {
-  late NotificationDiagnostic _diag;
-  String? _statusMsg;
-  bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _diag = widget.initial;
-  }
-
-  Future<void> _refresh() async {
-    final d = await NotificationService.diagnose();
-    if (!mounted) return;
-    setState(() => _diag = d);
-  }
-
-  Future<void> _runTestNow() async {
-    setState(() {
-      _busy = true;
-      _statusMsg = null;
-    });
-    try {
-      await NotificationService.showTestNow();
-      _statusMsg = "✓ נשלחה התראה מיידית. בדוק את מגש ההתראות.";
-    } catch (e) {
-      _statusMsg = "✗ שגיאה: $e";
-    }
-    await _refresh();
-    if (mounted) setState(() => _busy = false);
-  }
-
-  Future<void> _runTestInMinute() async {
-    setState(() {
-      _busy = true;
-      _statusMsg = null;
-    });
-    try {
-      final when = await NotificationService.scheduleTestInMinute();
-      final hh = when.hour.toString().padLeft(2, '0');
-      final mm = when.minute.toString().padLeft(2, '0');
-      final ss = when.second.toString().padLeft(2, '0');
-      _statusMsg = "✓ מתוזמן ל־$hh:$mm:$ss. השאר את המכשיר פתוח וחכה.";
-    } catch (e) {
-      _statusMsg = "✗ שגיאה: $e";
-    }
-    await _refresh();
-    if (mounted) setState(() => _busy = false);
-  }
-
-  Future<void> _requestPerms() async {
-    setState(() => _busy = true);
-    try {
-      await NotificationService.requestPermissionsAgain();
-      _statusMsg = "בקשת הרשאות נשלחה. בדוק אם הופיעה חלונית הרשאה.";
-    } catch (e) {
-      _statusMsg = "שגיאה: $e";
-    }
-    await _refresh();
-    if (mounted) setState(() => _busy = false);
-  }
-
-  Future<void> _rescheduleAll() async {
-    setState(() => _busy = true);
-    try {
-      await NotificationService.scheduleAllReminders();
-      _statusMsg = "✓ תוזמנו מחדש כל ההתראות (עומר + תפילין).";
-    } catch (e) {
-      _statusMsg = "✗ שגיאה: $e";
-    }
-    await _refresh();
-    if (mounted) setState(() => _busy = false);
-  }
-
-  String _boolLabel(bool? v) {
-    if (v == null) return "לא ידוע";
-    return v ? "✓ פעיל" : "✗ חסום";
-  }
-
-  Color _boolColor(bool? v) {
-    if (v == null) return AppColors.textMuted;
-    return v ? const Color(0xFF7CCB8F) : const Color(0xFFE27D7D);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pendingPreview = _diag.pendingIds.take(8).join(", ");
-    final pendingSuffix =
-        _diag.pendingIds.length > 8 ? "... (סך הכל ${_diag.pendingCount})" : "";
-
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 16,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textMuted,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text("אבחון התראות",
-                textAlign: TextAlign.center,
-                style: AppFonts.ui(
-                    size: 20,
-                    weight: FontWeight.w700,
-                    color: AppColors.textPrimary)),
-            const SizedBox(height: 16),
-            _row("הרשאת התראות (Android 13+)",
-                _boolLabel(_diag.notificationsEnabled),
-                _boolColor(_diag.notificationsEnabled)),
-            const SizedBox(height: 8),
-            _row("אזעקות מדויקות (SCHEDULE_EXACT_ALARM)",
-                _boolLabel(_diag.canScheduleExactAlarms),
-                _boolColor(_diag.canScheduleExactAlarms)),
-            const SizedBox(height: 8),
-            _row(
-                "התראות מתוזמנות בתור",
-                "${_diag.pendingCount}${_diag.pendingCount > 0 ? " (ids: $pendingPreview$pendingSuffix)" : ""}",
-                AppColors.goldSoft),
-            const SizedBox(height: 18),
-            if (_statusMsg != null) ...[
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: AppColors.bgLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(_statusMsg!,
-                    textDirection: TextDirection.rtl,
-                    style: AppFonts.ui(
-                        size: 14, color: AppColors.textPrimary, height: 1.5)),
-              ),
-              const SizedBox(height: 12),
-            ],
-            _actionBtn(
-                icon: Icons.notifications_active,
-                label: "שלח התראת בדיקה עכשיו",
-                onPressed: _busy ? null : _runTestNow),
-            const SizedBox(height: 8),
-            _actionBtn(
-                icon: Icons.schedule,
-                label: "תזמן התראת בדיקה לעוד דקה",
-                onPressed: _busy ? null : _runTestInMinute),
-            const SizedBox(height: 8),
-            _actionBtn(
-                icon: Icons.lock_open,
-                label: "בקש הרשאות שוב",
-                onPressed: _busy ? null : _requestPerms),
-            const SizedBox(height: 8),
-            _actionBtn(
-                icon: Icons.refresh,
-                label: "תזמן מחדש את כל ההתראות",
-                onPressed: _busy ? null : _rescheduleAll),
-            const SizedBox(height: 14),
-            Text(
-              "אם ההתראה המיידית לא מגיעה - הבעיה בהרשאות או באופטימיזציית סוללה של אנדרואיד.",
-              textAlign: TextAlign.center,
-              style: AppFonts.ui(
-                  size: 12, color: AppColors.textMuted, height: 1.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _row(String label, String value, Color valueColor) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(label,
-              style: AppFonts.ui(
-                  size: 14,
-                  color: AppColors.textSecondary,
-                  weight: FontWeight.w500)),
-        ),
-        const SizedBox(width: 8),
-        Text(value,
-            style: AppFonts.ui(
-                size: 14, color: valueColor, weight: FontWeight.w700)),
-      ],
-    );
-  }
-
-  Widget _actionBtn({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onPressed,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18, color: AppColors.bgDeep),
-        label: Text(label,
-            style: AppFonts.ui(
-                size: 15,
-                weight: FontWeight.w700,
-                color: AppColors.bgDeep)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.goldSoft,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
-        ),
-      ),
-    );
   }
 }

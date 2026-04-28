@@ -4,6 +4,8 @@ import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../data/omer_days.dart';
+import '../models/zman_type.dart';
+import 'daily_study_service.dart';
 import 'jewish_day_service.dart';
 import 'omer_service.dart';
 import 'preferences_service.dart';
@@ -25,11 +27,27 @@ class NotificationService {
   static const String _channelTefillinName = 'תפילין';
   static const String _channelTefillinDesc = 'תזכורת בוקר להניח תפילין';
 
+  static const String _channelZmanim = 'zmanim_daily';
+  static const String _channelZmanimName = 'זמני היום';
+  static const String _channelZmanimDesc =
+      'תזכורות לפני זמני היום (סוף ק"ש, מנחה, הדלקת נרות וכו\')';
+
+  static const String _channelDafYomi = 'daf_yomi_daily';
+  static const String _channelDafYomiName = 'דף יומי';
+  static const String _channelDafYomiDesc =
+      'תזכורת יומית ללימוד דף יומי בבלי';
+
   // טווחי מזהים - למנוע התנגשות בין סוגים
-  // 1..49   = ימי עומר
-  // 100..114 = 14 ימי תפילין קדימה
+  // 1..49      = ימי עומר
+  // 100..114   = 14 ימי תפילין קדימה
+  // 200..499   = זמני היום (עד 20 סוגים × 14 ימים, פיזית 15 × 14 = 210)
+  // 500..513   = 14 ימי דף יומי קדימה
   static const int _tefillinIdBase = 100;
   static const int _tefillinDaysAhead = 14;
+  static const int _zmanimIdBase = 200;
+  static const int _zmanimDaysAhead = 14;
+  static const int _dafYomiIdBase = 500;
+  static const int _dafYomiDaysAhead = 14;
 
   static Future<void> init() async {
     tz_data.initializeTimeZones();
@@ -51,12 +69,14 @@ class NotificationService {
     await androidImpl?.requestExactAlarmsPermission();
   }
 
-  /// מתזמן את כל ההתראות - תפילין (14 ימים) ועומר (49 ימים בזמן הספירה).
+  /// מתזמן את כל ההתראות - תפילין, עומר, וזמני היום (14 ימים קדימה).
   /// נקרא בשינוי הגדרות, התחלת אפליקציה, וסימון של יום.
   static Future<void> scheduleAllReminders() async {
     await _plugin.cancelAll();
     await scheduleAllOmerReminders(skipCancel: true);
     await scheduleAllTefillinReminders(skipCancel: true);
+    await scheduleAllZmanimReminders(skipCancel: true);
+    await scheduleAllDafYomiReminders(skipCancel: true);
   }
 
   // ------------------ עומר ------------------
@@ -68,6 +88,9 @@ class NotificationService {
         await _plugin.cancel(i);
       }
     }
+
+    // אם המשתמש כיבה את התראות העומר - יוצאים אחרי הביטול
+    if (!await PreferencesService.isOmerEnabled()) return;
 
     final hour = await PreferencesService.getReminderHour();
     final minute = await PreferencesService.getReminderMinute();
@@ -135,6 +158,8 @@ class NotificationService {
         await _plugin.cancel(_tefillinIdBase + i);
       }
     }
+
+    if (!await PreferencesService.isTefillinEnabled()) return;
 
     final city = await ProfileService.getCity();
     final tefillinHour = await PreferencesService.getTefillinHour();
@@ -206,6 +231,139 @@ class NotificationService {
         when: scheduled,
         details: details,
         payload: 'tefillin_${targetDate.toIso8601String()}',
+      );
+    }
+  }
+
+  // ------------------ זמני היום ------------------
+
+  static Future<void> scheduleAllZmanimReminders(
+      {bool skipCancel = false}) async {
+    if (!skipCancel) {
+      final total = zmanimConfigs.length * _zmanimDaysAhead;
+      for (int i = 0; i < total; i++) {
+        await _plugin.cancel(_zmanimIdBase + i);
+      }
+    }
+
+    final city = await ProfileService.getCity();
+    final userName = await ProfileService.getName();
+    final personal =
+        (userName != null && userName.isNotEmpty) ? "$userName, " : "";
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (int zIdx = 0; zIdx < zmanimConfigs.length; zIdx++) {
+      final cfg = zmanimConfigs[zIdx];
+      if (!await PreferencesService.isZmanEnabled(cfg.type)) continue;
+      final leadMinutes =
+          await PreferencesService.getZmanLeadMinutes(cfg.type);
+
+      for (int offset = 0; offset < _zmanimDaysAhead; offset++) {
+        final targetDate = today.add(Duration(days: offset));
+        final jd = JewishDayService(city: city, date: targetDate);
+
+        if (cfg.silenceOnAssurBemelacha && jd.isAssurBemelacha) continue;
+
+        final zmanTime = cfg.compute(jd);
+        if (zmanTime == null) continue;
+
+        final alertTime =
+            zmanTime.subtract(Duration(minutes: leadMinutes));
+        final scheduled = tz.TZDateTime(
+          tz.local,
+          alertTime.year,
+          alertTime.month,
+          alertTime.day,
+          alertTime.hour,
+          alertTime.minute,
+        );
+        if (scheduled.isBefore(tz.TZDateTime.now(tz.local))) continue;
+
+        final zmanClockStr =
+            "${zmanTime.hour.toString().padLeft(2, '0')}:"
+            "${zmanTime.minute.toString().padLeft(2, '0')}";
+        final body = "$personal${cfg.shortLabel} בעוד $leadMinutes דק' "
+            "($zmanClockStr).";
+
+        const details = NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelZmanim,
+            _channelZmanimName,
+            channelDescription: _channelZmanimDesc,
+            importance: Importance.high,
+            priority: Priority.high,
+            styleInformation: BigTextStyleInformation(''),
+          ),
+        );
+
+        await _safeSchedule(
+          id: _zmanimIdBase + zIdx * _zmanimDaysAhead + offset,
+          title: cfg.notificationTitle,
+          body: body,
+          when: scheduled,
+          details: details,
+          payload: 'zman_${cfg.type.name}_${targetDate.toIso8601String()}',
+        );
+      }
+    }
+  }
+
+  // ------------------ דף יומי ------------------
+
+  static Future<void> scheduleAllDafYomiReminders(
+      {bool skipCancel = false}) async {
+    if (!skipCancel) {
+      for (int i = 0; i < _dafYomiDaysAhead; i++) {
+        await _plugin.cancel(_dafYomiIdBase + i);
+      }
+    }
+
+    if (!await PreferencesService.isDafYomiEnabled()) return;
+
+    final hour = await PreferencesService.getDafYomiHour();
+    final minute = await PreferencesService.getDafYomiMinute();
+    final userName = await ProfileService.getName();
+    final personal =
+        (userName != null && userName.isNotEmpty) ? "$userName, " : "";
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (int offset = 0; offset < _dafYomiDaysAhead; offset++) {
+      final targetDate = today.add(Duration(days: offset));
+      final scheduled = tz.TZDateTime(
+        tz.local,
+        targetDate.year,
+        targetDate.month,
+        targetDate.day,
+        hour,
+        minute,
+      );
+      if (scheduled.isBefore(tz.TZDateTime.now(tz.local))) continue;
+
+      final dafText = DailyStudyService.getDafYomiBavli(targetDate);
+      final body = "${personal}היום: $dafText";
+
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelDafYomi,
+          _channelDafYomiName,
+          channelDescription: _channelDafYomiDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          styleInformation: BigTextStyleInformation(''),
+        ),
+      );
+
+      await _safeSchedule(
+        id: _dafYomiIdBase + offset,
+        title: "דף יומי",
+        body: body,
+        when: scheduled,
+        details: details,
+        payload: 'daf_yomi_${targetDate.toIso8601String()}',
       );
     }
   }

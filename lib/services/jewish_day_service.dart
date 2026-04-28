@@ -87,6 +87,14 @@ class JewishDayService {
 
   // ---------- זמני היום ----------
 
+  /// עלות השחר (16.1 מעלות לפני זריחה — ברירת מחדל kosher_dart)
+  DateTime? get alosHashachar => _zc.getAlosHashachar();
+
+  /// משיכיר — זמן עטיפת טלית/הנחת תפילין (11 מעלות, נפוץ אצל ספרדים)
+  late final ComplexZmanimCalendar _czc =
+      ComplexZmanimCalendar.intGeoLocation(_zc.getGeoLocation());
+  DateTime? get misheyakir => _czc.getMisheyakir11Degrees();
+
   /// זריחה (הנץ החמה)
   DateTime? get sunrise => _zc.getSunrise();
 
@@ -96,14 +104,23 @@ class JewishDayService {
   /// צאת הכוכבים (8.5 מעלות, ברירת מחדל של kosher_dart)
   DateTime? get tzais => _zc.getTzais();
 
+  /// צאת הכוכבים שיטת ר"ת (72 דקות זמניות אחרי שקיעה) — לסיום שבת מחמיר
+  DateTime? get tzaisRabbeinuTam => _zc.getTzais72();
+
   /// חצות היום
   DateTime? get chatzos => _zc.getChatzos();
 
   /// סוף זמן קריאת שמע (שיטת הגר"א - ברירת מחדל למנהג ספרד)
   DateTime? get sofZmanShma => _zc.getSofZmanShmaGRA();
 
+  /// סוף זמן קריאת שמע מג"א (72 דק' לפני זריחה ועד 72 אחרי שקיעה)
+  DateTime? get sofZmanShmaMGA => _zc.getSofZmanShmaMGA();
+
   /// סוף זמן תפילה (שיטת הגר"א)
   DateTime? get sofZmanTfila => _zc.getSofZmanTfilaGRA();
+
+  /// סוף זמן תפילה מג"א
+  DateTime? get sofZmanTfilaMGA => _zc.getSofZmanTfilaMGA();
 
   /// מנחה גדולה
   DateTime? get minchaGedola => _zc.getMinchaGedola();
@@ -111,6 +128,17 @@ class JewishDayService {
   /// מנחה קטנה
   DateTime? get minchaKetana => _zc.getMinchaKetana();
 
+  /// פלג המנחה
+  DateTime? get plagHamincha => _zc.getPlagHamincha();
+
   /// זמן הדלקת נרות (אם מחר שבת/יו"ט) - ברירת מחדל 18 דק' לפני שקיעה
   DateTime? get candleLighting => _zc.getCandleLighting();
+
+  /// תאריך עברי מעוצב, למשל "כ״א שבט תשפ״ו".
+  String get hebrewDateString {
+    final f = HebrewDateFormatter();
+    f.hebrewFormat = true;
+    f.useGershGershayim = true;
+    return f.format(_jc);
+  }
 }

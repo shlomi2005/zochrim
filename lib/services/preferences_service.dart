@@ -1,5 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/zman_type.dart';
+
 /// שומר העדפות ומצב מקומי: האם ספרתי היום, שעת תזכורת.
 class PreferencesService {
   static const _keyLastCountedDay = 'last_counted_day_iso'; // iso date (yyyy-MM-dd) של התאריך הלועזי שבערב שלו ספרנו
@@ -13,6 +15,19 @@ class PreferencesService {
   static const _keyTefillinStreak = 'tefillin_streak';
   static const _keyTefillinReminderHour = 'tefillin_reminder_hour';
   static const _keyTefillinReminderMinute = 'tefillin_reminder_minute';
+
+  // מתגי הפעלה/כיבוי per-notification (ברירת מחדל: דלוקים)
+  static const _keyTefillinEnabled = 'tefillin_notifications_enabled';
+  static const _keyOmerEnabled = 'omer_notifications_enabled';
+
+  // דף יומי בבלי
+  static const _keyDafYomiEnabled = 'daf_yomi_enabled';
+  static const _keyDafYomiHour = 'daf_yomi_hour';
+  static const _keyDafYomiMinute = 'daf_yomi_minute';
+
+  /// ברירת מחדל לשעת תזכורת דף יומי (בוקר)
+  static const int defaultDafYomiHour = 7;
+  static const int defaultDafYomiMinute = 0;
 
   /// ברירת מחדל לשעת תזכורת עומר (ערב)
   static const int defaultReminderHour = 20;
@@ -160,5 +175,81 @@ class PreferencesService {
     final p = await _prefs;
     await p.setInt(_keyTefillinReminderHour, hour);
     await p.setInt(_keyTefillinReminderMinute, minute);
+  }
+
+  // ------------------ מתגי הפעלה ------------------
+
+  static Future<bool> isTefillinEnabled() async {
+    final p = await _prefs;
+    return p.getBool(_keyTefillinEnabled) ?? true;
+  }
+
+  static Future<void> setTefillinEnabled(bool enabled) async {
+    final p = await _prefs;
+    await p.setBool(_keyTefillinEnabled, enabled);
+  }
+
+  static Future<bool> isOmerEnabled() async {
+    final p = await _prefs;
+    return p.getBool(_keyOmerEnabled) ?? true;
+  }
+
+  static Future<void> setOmerEnabled(bool enabled) async {
+    final p = await _prefs;
+    await p.setBool(_keyOmerEnabled, enabled);
+  }
+
+  // ------------------ זמני היום ------------------
+
+  /// ברירת מחדל: כל הזמנים כבויים (opt-in). המשתמש מפעיל מה שהוא רוצה.
+  static String _zmanEnabledKey(ZmanType z) => 'zman_${z.name}_enabled';
+  static String _zmanLeadKey(ZmanType z) => 'zman_${z.name}_lead_min';
+
+  static Future<bool> isZmanEnabled(ZmanType z) async {
+    final p = await _prefs;
+    return p.getBool(_zmanEnabledKey(z)) ?? false;
+  }
+
+  static Future<void> setZmanEnabled(ZmanType z, bool enabled) async {
+    final p = await _prefs;
+    await p.setBool(_zmanEnabledKey(z), enabled);
+  }
+
+  static Future<int> getZmanLeadMinutes(ZmanType z) async {
+    final p = await _prefs;
+    return p.getInt(_zmanLeadKey(z)) ?? defaultLeadMinutes;
+  }
+
+  static Future<void> setZmanLeadMinutes(ZmanType z, int minutes) async {
+    final p = await _prefs;
+    await p.setInt(_zmanLeadKey(z), minutes);
+  }
+
+  // ------------------ דף יומי ------------------
+
+  static Future<bool> isDafYomiEnabled() async {
+    final p = await _prefs;
+    return p.getBool(_keyDafYomiEnabled) ?? false;
+  }
+
+  static Future<void> setDafYomiEnabled(bool enabled) async {
+    final p = await _prefs;
+    await p.setBool(_keyDafYomiEnabled, enabled);
+  }
+
+  static Future<int> getDafYomiHour() async {
+    final p = await _prefs;
+    return p.getInt(_keyDafYomiHour) ?? defaultDafYomiHour;
+  }
+
+  static Future<int> getDafYomiMinute() async {
+    final p = await _prefs;
+    return p.getInt(_keyDafYomiMinute) ?? defaultDafYomiMinute;
+  }
+
+  static Future<void> setDafYomiTime(int hour, int minute) async {
+    final p = await _prefs;
+    await p.setInt(_keyDafYomiHour, hour);
+    await p.setInt(_keyDafYomiMinute, minute);
   }
 }
