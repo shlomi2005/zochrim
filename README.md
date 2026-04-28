@@ -9,12 +9,12 @@
 ## מה האפליקציה עושה
 
 - 📿 **תזכורת תפילין יומית** — לפי השעה שאתה בוחר, עם זמני שחרית מדויקים לעיר שלך
-- 🌙 **ספירת העומר** — 49 ימי ספירה עם נוסח עדות המזרח, מעקב התקדמות וברכה מלאה
+- 🌙 **ספירת העומר** — 49 ימי ספירה עם מעקב התקדמות וברכה מלאה, נוסח עדות המזרח
 - ☀️ **זמני היום** — זריחה, סוף זמן ק"ש, סוף זמן תפילה, מנחה גדולה, שקיעה, צאת הכוכבים
 - 🕯️ **הדלקת נרות** — תזכורת לפני שבת ויו"ט לפי העיר
 - 📅 **לוח עברי חי** — תאריך עברי במסך הבית, עם שעון הלכתי שיודע שהיום מתחלף בשקיעה/צאת
-- 📖 **לימוד יומי** — משנה והלכה לכל יום
-- 🛡️ **יודעת מתי לא להפריע** — שבת, יום טוב, חוה"מ פסח וסוכות (מנהג ספרד), ת"ב שחרית, ר"ח
+- 📖 **דף היומי בבלי**
+- 🛡️ **יודעת מתי לא להפריע** — שבת, יום טוב, חוה"מ פסח וסוכות, ת"ב שחרית, ר"ח
 - 💪 **חיזוק** — מנגנון פרטי לעידוד התמדה אישית
 
 ## עקרונות
@@ -62,12 +62,12 @@ Open source, non-profit, built as a gift to the religious community.
 ### Features
 
 - 📿 Daily tefillin morning reminder, with morning zmanim for your city
-- 🌙 Full 49-day Omer counting with Sephardic nusach
+- 🌙 Full 49-day Omer counting with progress tracking and full blessing, Sephardic nusach
 - ☀️ Halachic times for 18 Israeli cities
 - 🕯️ Candle lighting reminder before Shabbat / Yom Tov
 - 📅 Live Hebrew calendar with a halachic clock that rolls the date at sunset / tzeit
-- 📖 Daily learning — Mishna and Halacha
-- 🛡️ Automatically silent on Shabbat, Yom Tov, Chol HaMoed (Sephardic), Tisha B'Av shacharit, Rosh Chodesh handling
+- 📖 Daf Yomi (Bavli)
+- 🛡️ Automatically silent on Shabbat, Yom Tov, Chol HaMoed, Tisha B'Av shacharit, Rosh Chodesh handling
 - 💪 A private mechanism for personal perseverance
 
 ### Principles
