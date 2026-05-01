@@ -8,11 +8,13 @@ class ChizukMilestone {
   final String title; // "יום ראשון" / "7 ימים" וכו' - לכרטיס החגיגה
   final String subtitle; // משפט קצר שמסביר למה זה משמעותי
   final String quote; // ציטוט מיוחד למילסטון הזה
+  final String? medalAsset; // נתיב למדליה. null = אייקון גנרי בלבד.
   const ChizukMilestone({
     required this.days,
     required this.title,
     required this.subtitle,
     required this.quote,
+    this.medalAsset,
   });
 }
 
@@ -30,6 +32,7 @@ const List<ChizukMilestone> chizukMilestones = [
     subtitle: "הוכחת לעצמך שזה אפשרי",
     quote:
         "שלושה ימים זה לא מקרה. זו בחירה שחוזרת על עצמה — ובחירה יוצרת אדם.",
+    medalAsset: "assets/medals/01_nitzan_3days.png",
   ),
   ChizukMilestone(
     days: 7,
@@ -37,6 +40,7 @@ const List<ChizukMilestone> chizukMilestones = [
     subtitle: "שבוע — כמו בריאת העולם",
     quote:
         "'שבע יפול צדיק וקם' — והקימה היא הניצחון, לא הנפילה. שבוע של קימה זה אור גדול.",
+    medalAsset: "assets/medals/02_shavua_7days.png",
   ),
   ChizukMilestone(
     days: 14,
@@ -44,6 +48,7 @@ const List<ChizukMilestone> chizukMilestones = [
     subtitle: "ההרגל מתחיל להיקבע",
     quote:
         "שבועיים — המוח כבר מזהה את הנתיב החדש. כל יום הבא יהיה קל יותר.",
+    medalAsset: "assets/medals/03_shtei_shavuot_14days.png",
   ),
   ChizukMilestone(
     days: 21,
@@ -51,6 +56,7 @@ const List<ChizukMilestone> chizukMilestones = [
     subtitle: "הזמן שבו הרגל נהיה טבע שני",
     quote:
         "21 ימים. אתה לא סתם עושה — אתה כבר *הוא*. אדם שמתגבר, זו הזהות שלך עכשיו.",
+    medalAsset: "assets/medals/04_chodesh_baderech_21days.png",
   ),
   ChizukMilestone(
     days: 30,
@@ -58,13 +64,15 @@ const List<ChizukMilestone> chizukMilestones = [
     subtitle: "חודש שלם של ניצחונות",
     quote:
         "חודש. זה שינוי אמיתי. תסתכל אחורה ותראה — אתה כבר לא אותו אדם שהתחיל.",
+    medalAsset: "assets/medals/05_chodesh_shalem_30days.png",
   ),
   ChizukMilestone(
-    days: 60,
-    title: "חודשיים",
-    subtitle: "אתה בין המעטים שמגיעים לכאן",
+    days: 50,
+    title: "חמישים יום",
+    subtitle: "כמו ספירת העומר — חצי הדרך לחירות פנימית",
     quote:
-        "רוב האנשים מוותרים הרבה לפני. אתה לא רוב האנשים.",
+        "50 יום זה זמן של בנייה — כמו מיציאת מצרים עד מתן תורה. אתה בונה את עצמך מחדש.",
+    medalAsset: "assets/medals/06_chamishim_50days.png",
   ),
   ChizukMilestone(
     days: 100,
@@ -72,6 +80,7 @@ const List<ChizukMilestone> chizukMilestones = [
     subtitle: "שלושה ספרות של כוח",
     quote:
         "100. מספר עגול. כמו 100 ברכות ליום. אתה בונה משהו קדוש.",
+    medalAsset: "assets/medals/07_meah_yom_100days.png",
   ),
   ChizukMilestone(
     days: 180,

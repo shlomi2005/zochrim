@@ -1,3 +1,4 @@
+import 'package:app_settings/app_settings.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -5,6 +6,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../data/omer_days.dart';
 import '../models/zman_type.dart';
+import 'chizuk_service.dart';
 import 'daily_study_service.dart';
 import 'jewish_day_service.dart';
 import 'omer_service.dart';
@@ -37,17 +39,26 @@ class NotificationService {
   static const String _channelDafYomiDesc =
       'תזכורת יומית ללימוד דף יומי בבלי';
 
+  /// ערוץ "תזכורת אישית" — שם ניטרלי בכוונה כדי לשמור על פרטיות המשתמש
+  /// בהגדרות אנדרואיד. רק הוא יודע במה מדובר.
+  static const String _channelChizuk = 'personal_reminder';
+  static const String _channelChizukName = 'תזכורת אישית';
+  static const String _channelChizukDesc = 'תזכורת שהמשתמש הגדיר בעצמו';
+
   // טווחי מזהים - למנוע התנגשות בין סוגים
   // 1..49      = ימי עומר
   // 100..114   = 14 ימי תפילין קדימה
   // 200..499   = זמני היום (עד 20 סוגים × 14 ימים, פיזית 15 × 14 = 210)
   // 500..513   = 14 ימי דף יומי קדימה
+  // 600..613   = 14 ימי "תזכורת אישית" (חיזוק)
   static const int _tefillinIdBase = 100;
   static const int _tefillinDaysAhead = 14;
   static const int _zmanimIdBase = 200;
   static const int _zmanimDaysAhead = 14;
   static const int _dafYomiIdBase = 500;
   static const int _dafYomiDaysAhead = 14;
+  static const int _chizukIdBase = 600;
+  static const int _chizukDaysAhead = 14;
 
   static Future<void> init() async {
     tz_data.initializeTimeZones();
@@ -67,6 +78,51 @@ class NotificationService {
         AndroidFlutterLocalNotificationsPlugin>();
     await androidImpl?.requestNotificationsPermission();
     await androidImpl?.requestExactAlarmsPermission();
+
+    // אחרי הבקשה — בודקים אם המשתמש דחה. אם כן, מכבים את כל המתגים
+    // אוטומטית כדי שמסך ההגדרות לא יהיה עם מתגים דלוקים שלא עושים כלום.
+    await syncWithSystemPermission();
+  }
+
+  /// בודק אם הרשאת ההתראות הופעלה במערכת.
+  static Future<bool> areNotificationsEnabled() async {
+    final androidImpl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      final ok = await androidImpl?.areNotificationsEnabled();
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// אם ההרשאה כבויה במערכת — מכבה את כל המתגים בשמירת העדפות
+  /// ומבטל כל התראה שמתוזמנת. אם ההרשאה דלוקה — לא נוגע במצב המשתמש.
+  static Future<void> syncWithSystemPermission() async {
+    if (await areNotificationsEnabled()) return;
+
+    await PreferencesService.setTefillinEnabled(false);
+    await PreferencesService.setOmerEnabled(false);
+    await PreferencesService.setDafYomiEnabled(false);
+    for (final cfg in zmanimConfigs) {
+      await PreferencesService.setZmanEnabled(cfg.type, false);
+    }
+    await ChizukService.setReminderEnabled(false);
+    try {
+      await _plugin.cancelAll();
+    } catch (_) {}
+  }
+
+  /// פותח את עמוד ההגדרות של ההתראות באנדרואיד עבור האפליקציה.
+  static Future<void> openSystemNotificationSettings() async {
+    try {
+      await AppSettings.openAppSettings(type: AppSettingsType.notification);
+    } catch (_) {
+      // fallback — עמוד הגדרות אפליקציה כללי
+      try {
+        await AppSettings.openAppSettings();
+      } catch (_) {}
+    }
   }
 
   /// מתזמן את כל ההתראות - תפילין, עומר, וזמני היום (14 ימים קדימה).
@@ -77,6 +133,7 @@ class NotificationService {
     await scheduleAllTefillinReminders(skipCancel: true);
     await scheduleAllZmanimReminders(skipCancel: true);
     await scheduleAllDafYomiReminders(skipCancel: true);
+    await scheduleAllChizukReminders(skipCancel: true);
   }
 
   // ------------------ עומר ------------------
@@ -170,7 +227,12 @@ class NotificationService {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
+    final alreadyDoneToday = await PreferencesService.hasDoneTefillinToday();
+
     for (int offset = 0; offset < _tefillinDaysAhead; offset++) {
+      // אם המשתמש כבר סימן היום — אין טעם לשלוח את התזכורת של היום.
+      if (offset == 0 && alreadyDoneToday) continue;
+
       final targetDate = today.add(Duration(days: offset));
       final decision = TefillinService.decide(city: city, date: targetDate);
 
@@ -366,6 +428,84 @@ class NotificationService {
         payload: 'daf_yomi_${targetDate.toIso8601String()}',
       );
     }
+  }
+
+  // ------------------ חיזוק (תזכורת אישית) ------------------
+
+  /// מתזמן את התזכורת היומית של פיצ'ר החיזוק.
+  /// כותרת = הטקסט המותאם של המשתמש (ברירת מחדל: "תזכורת").
+  /// ה-payload ריק במכוון — לחיצה על ההתראה רק פותחת את האפליקציה
+  /// למסך הבית, לא למסך החיזוק. שמירת פרטיות.
+  static Future<void> scheduleAllChizukReminders(
+      {bool skipCancel = false}) async {
+    if (!skipCancel) {
+      for (int i = 0; i < _chizukDaysAhead; i++) {
+        await _plugin.cancel(_chizukIdBase + i);
+      }
+    }
+
+    if (!await ChizukService.isReminderEnabled()) return;
+
+    final reminderHour = await ChizukService.getReminderHour();
+    final reminderMinute = await ChizukService.getReminderMinute();
+    final dayEndHour = await ChizukService.getDayEndHour();
+    final dayEndMinute = await ChizukService.getDayEndMinute();
+    final text = await ChizukService.getReminderText();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    for (int offset = 0; offset < _chizukDaysAhead; offset++) {
+      final targetDate = today.add(Duration(days: offset));
+      final scheduled = tz.TZDateTime(
+        tz.local,
+        targetDate.year,
+        targetDate.month,
+        targetDate.day,
+        reminderHour,
+        reminderMinute,
+      );
+
+      if (scheduled.isBefore(tz.TZDateTime.now(tz.local))) continue;
+
+      // היום הלוגי שאליו תתייחס לחיצת המשתמש כשההתראה תופיע:
+      // אם שעת התזכורת אחרי סוף-היום של המשתמש — היום הלוגי = targetDate.
+      // אחרת — היום הלוגי = יום לפני targetDate.
+      final reminderMinutes = reminderHour * 60 + reminderMinute;
+      final dayEndMinutes = dayEndHour * 60 + dayEndMinute;
+      final logicalDate = reminderMinutes >= dayEndMinutes
+          ? targetDate
+          : targetDate.subtract(const Duration(days: 1));
+
+      // אם היום הלוגי כבר סומן (התגברות/קושי) — מדלגים.
+      final status = await ChizukService.getStatus(logicalDate);
+      if (status != null) continue;
+
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelChizuk,
+          _channelChizukName,
+          channelDescription: _channelChizukDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      );
+
+      await _safeSchedule(
+        id: _chizukIdBase + offset,
+        title: text,
+        body: '',
+        when: scheduled,
+        details: details,
+        // payload ריק בכוונה — אין ניתוב למסך מיוחד.
+        payload: '',
+      );
+    }
+  }
+
+  /// מבטל את התזכורת של "היום" (offset=0) — אחרי שהמשתמש סימן בידיים.
+  static Future<void> cancelChizukToday() async {
+    await _plugin.cancel(_chizukIdBase);
   }
 
   // ------------------ עזר ------------------

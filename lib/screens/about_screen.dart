@@ -205,7 +205,7 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            "יששכר שלמה בן יפה",
+            "רבי יששכר שלמה בן יפה זצ״ל",
             textAlign: TextAlign.center,
             style: AppFonts.liturgical(
               size: 18,
@@ -226,7 +226,7 @@ class AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            "חיים בן סוליקה",
+            "רבי חיים בן סוליקה זצ״ל",
             textAlign: TextAlign.center,
             style: AppFonts.liturgical(
               size: 18,

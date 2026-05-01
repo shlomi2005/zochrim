@@ -17,6 +17,21 @@ class ChizukService {
   static const _keyLastCelebrationDate = 'chizuk_last_celebration_date';
   static const _keyJourneyStartDate = 'chizuk_journey_start_date';
 
+  // ------------------ הגדרות אישיות ------------------
+  static const _keyDayEndHour = 'chizuk_day_end_hour';
+  static const _keyDayEndMinute = 'chizuk_day_end_minute';
+  static const _keyReminderEnabled = 'chizuk_reminder_enabled';
+  static const _keyReminderHour = 'chizuk_reminder_hour';
+  static const _keyReminderMinute = 'chizuk_reminder_minute';
+  static const _keyReminderText = 'chizuk_reminder_text';
+
+  /// טקסט ברירת מחדל להתראה — נייטרלי בכוונה כדי לא לחשוף מה זה.
+  static const String defaultReminderText = 'תזכורת';
+  static const int defaultReminderHour = 21;
+  static const int defaultReminderMinute = 0;
+  static const int defaultDayEndHour = 0;
+  static const int defaultDayEndMinute = 0;
+
   static Future<SharedPreferences> get _prefs =>
       SharedPreferences.getInstance();
 
@@ -173,12 +188,11 @@ class ChizukService {
     return _parseIso(s);
   }
 
-  /// קובע את היום הנוכחי כתחילת המסע, אם עדיין לא נקבע. מחזיר את התאריך.
+  /// קובע את היום הלוגי הנוכחי כתחילת המסע, אם עדיין לא נקבע.
   static Future<DateTime> ensureJourneyStarted() async {
     final existing = await getJourneyStartDate();
     if (existing != null) return existing;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = await logicalToday();
     final p = await _prefs;
     await p.setString(_keyJourneyStartDate, _iso(today));
     return today;
@@ -186,19 +200,18 @@ class ChizukService {
 
   // ------------------ חגיגה פעם ביום ------------------
 
-  /// בודק אם עוד לא חגגנו היום (קונפטי/ציטוט חדש).
+  /// בודק אם עוד לא חגגנו ביום הלוגי הנתון.
   /// נועל את החגיגה לתאריך, כדי שיהיה להם למה לחכות למחר.
-  static Future<bool> shouldCelebrateToday() async {
+  static Future<bool> shouldCelebrateOn(DateTime date) async {
     final p = await _prefs;
     final last = p.getString(_keyLastCelebrationDate);
-    final today = _iso(DateTime.now());
-    return last != today;
+    return last != _iso(date);
   }
 
-  /// מסמן שחגגנו היום. ישאר נעול עד מחר גם אם המשתמש ינקה וישוב לסמן.
-  static Future<void> markCelebratedToday() async {
+  /// מסמן שחגגנו ביום הלוגי הנתון. ישאר נעול עד מחר.
+  static Future<void> markCelebratedOn(DateTime date) async {
     final p = await _prefs;
-    await p.setString(_keyLastCelebrationDate, _iso(DateTime.now()));
+    await p.setString(_keyLastCelebrationDate, _iso(date));
   }
 
   // ------------------ מילסטונים ------------------
@@ -221,6 +234,82 @@ class ChizukService {
 
     await p.setInt(_keyHighestMilestone, milestone.days);
     return milestone;
+  }
+
+  // ------------------ הגדרות: שעת סוף יום ------------------
+
+  /// שעת סוף-יום שבחר המשתמש. כברירת מחדל חצות.
+  /// משמשת ל[logicalToday] ולתזמון ההתראה.
+  static Future<int> getDayEndHour() async {
+    final p = await _prefs;
+    return p.getInt(_keyDayEndHour) ?? defaultDayEndHour;
+  }
+
+  static Future<int> getDayEndMinute() async {
+    final p = await _prefs;
+    return p.getInt(_keyDayEndMinute) ?? defaultDayEndMinute;
+  }
+
+  static Future<void> setDayEnd(int hour, int minute) async {
+    final p = await _prefs;
+    await p.setInt(_keyDayEndHour, hour);
+    await p.setInt(_keyDayEndMinute, minute);
+  }
+
+  /// "היום הלוגי" של המשתמש — התאריך של החלון בן 24 השעות שזה עתה הסתיים
+  /// לפי שעת סוף-היום שבחר. זהו התאריך שעליו הוא יסמן עכשיו.
+  ///
+  /// דוגמה: סוף-יום 12:00. היום שני 11:00 → logicalToday = יום ראשון.
+  /// ב-12:01 ביום שני → logicalToday = יום שני.
+  static Future<DateTime> logicalToday([DateTime? now]) async {
+    final h = await getDayEndHour();
+    final m = await getDayEndMinute();
+    now ??= DateTime.now();
+    final todayCutoff = DateTime(now.year, now.month, now.day, h, m);
+    final logical = now.isBefore(todayCutoff)
+        ? todayCutoff.subtract(const Duration(days: 1))
+        : todayCutoff;
+    return DateTime(logical.year, logical.month, logical.day);
+  }
+
+  // ------------------ הגדרות: התראה ------------------
+
+  static Future<bool> isReminderEnabled() async {
+    final p = await _prefs;
+    return p.getBool(_keyReminderEnabled) ?? false;
+  }
+
+  static Future<void> setReminderEnabled(bool enabled) async {
+    final p = await _prefs;
+    await p.setBool(_keyReminderEnabled, enabled);
+  }
+
+  static Future<int> getReminderHour() async {
+    final p = await _prefs;
+    return p.getInt(_keyReminderHour) ?? defaultReminderHour;
+  }
+
+  static Future<int> getReminderMinute() async {
+    final p = await _prefs;
+    return p.getInt(_keyReminderMinute) ?? defaultReminderMinute;
+  }
+
+  static Future<void> setReminderTime(int hour, int minute) async {
+    final p = await _prefs;
+    await p.setInt(_keyReminderHour, hour);
+    await p.setInt(_keyReminderMinute, minute);
+  }
+
+  static Future<String> getReminderText() async {
+    final p = await _prefs;
+    final t = p.getString(_keyReminderText);
+    if (t == null || t.trim().isEmpty) return defaultReminderText;
+    return t;
+  }
+
+  static Future<void> setReminderText(String text) async {
+    final p = await _prefs;
+    await p.setString(_keyReminderText, text);
   }
 
   // ------------------ רוטציית ציטוטים ------------------

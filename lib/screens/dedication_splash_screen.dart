@@ -77,11 +77,11 @@ class _DedicationSplashScreenState extends State<DedicationSplashScreen>
                     const SizedBox(height: 26),
                     _label("לעילוי נשמת"),
                     const SizedBox(height: 8),
-                    _name("יששכר שלמה בן יפה"),
+                    _name("רבי יששכר שלמה בן יפה זצ״ל"),
                     const SizedBox(height: 20),
                     _label("ולעילוי נשמת"),
                     const SizedBox(height: 8),
-                    _name("חיים בן סוליקה"),
+                    _name("רבי חיים בן סוליקה זצ״ל"),
                     const SizedBox(height: 28),
                     Container(
                       width: 36,

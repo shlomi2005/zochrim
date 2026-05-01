@@ -1,7 +1,30 @@
 import 'package:flutter/material.dart';
 import '../models/omer_day.dart';
+import '../services/omer_service.dart';
 import '../theme/app_theme.dart';
 import 'glass_card.dart';
+
+const List<String> _hebMonths = [
+  '',
+  'ינואר',
+  'פברואר',
+  'מרץ',
+  'אפריל',
+  'מאי',
+  'יוני',
+  'יולי',
+  'אוגוסט',
+  'ספטמבר',
+  'אוקטובר',
+  'נובמבר',
+  'דצמבר',
+];
+
+String _formatStartMessage(DateTime eveningGreg) {
+  // התאריך הלועזי שבערבו (אחרי צאת הכוכבים) מתחילה ספירת יום 1.
+  final month = _hebMonths[eveningGreg.month];
+  return 'ספירת העומר תתחיל בערב ${eveningGreg.day} ב$month ${eveningGreg.year}';
+}
 
 /// הכרטיס המרכזי - מספר היום הענק + הטקסט המלא של הספירה
 class OmerCard extends StatefulWidget {
@@ -41,8 +64,10 @@ class _OmerCardState extends State<OmerCard>
     final d = widget.omerDay;
 
     if (d.beforeOmer) {
-      return _messageCard("עוד לא התחלנו לספור 🌱",
-          "ספירת העומר מתחילה בליל חמישי, 2 באפריל 2026");
+      return _messageCard(
+        "עוד לא התחלנו לספור 🌱",
+        _formatStartMessage(OmerService.firstOmerNight),
+      );
     }
     if (d.afterOmer) {
       final name = widget.userName;

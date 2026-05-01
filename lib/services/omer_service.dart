@@ -1,32 +1,54 @@
+import 'package:kosher_dart/kosher_dart.dart';
+
 import '../models/city_preset.dart';
 import '../models/omer_day.dart';
 import 'halachic_clock.dart';
 
 /// שירות לחישוב יום הספירה הנוכחי ולהמרה בין "יום עומר" לתאריך לועזי.
 ///
-/// ספירת העומר תשפ"ו:
-///   - ערב יום 1: ליל ג', 2 באפריל 2026 (הערב נכנס מ-2/4 אל 3/4)
-///   - ערב יום 49: ליל ד', 20 במאי 2026
-///   - שבועות: ליל ה', 21 במאי 2026
-///
 /// מודל: כל "יום עומר" מתחיל בערב של תאריך לועזי מסוים, אחרי צאת הכוכבים.
-/// הערב הזה "שייך" לתאריך הלועזי שלפניו — ומכאן `firstOmerNight = 2/4/2026`.
+/// הערב הזה "שייך" לתאריך הלועזי שלפניו — ומכאן שתאריך תחילת ספירת יום 1
+/// (firstOmerNight) הוא הלועזי שמכיל את היום של 15 בניסן (= ערב פסח שני
+/// שלאחריו, כשנכנס ל-16 בניסן, מתחילים לספור).
+///
+/// כל החישובים מבוססים `JewishCalendar` של kosher_dart, ולכן עובדים
+/// אוטומטית לכל שנה עברית — אין שום תאריך מקודד.
 ///
 /// כש-`city` מועברת, גבול היום נקבע לפי צאת הכוכבים האמיתי בעיר.
 /// בלי `city`, נופלים חזרה ל-fallback של 20:00 (לקוד ישן/בדיקות).
 class OmerService {
-  /// התאריך הלועזי שבערבו (אחרי צאת הכוכבים) מתחילה ספירת יום 1.
-  static final DateTime firstOmerNight = DateTime(2026, 4, 2);
+  /// fallback בלבד — כשלא מועברת עיר, מניחים שצאת הכוכבים ב-20:00.
+  static const int nightfallHour = 20;
 
-  /// alias שימושי לקוד ישן
+  /// התאריך הלועזי שבערבו (אחרי צאת הכוכבים) מתחילה ספירת יום 1.
+  /// מחושב דינמית לפי השנה העברית הנוכחית — תקף לכל שנה.
+  static DateTime get firstOmerNight {
+    final now = JewishCalendar.fromDateTime(DateTime.now());
+    return _firstOmerNightOfHebrewYear(now.getJewishYear());
+  }
+
+  /// שם תאימות לאחור — שווה ל-firstOmerNight.
   static DateTime get firstDay => firstOmerNight;
 
-  /// התאריך הלועזי שבערבו מתחילה ספירת יום 49 (20.5.2026)
+  /// התאריך הלועזי שבערבו מתחילה ספירת יום 49.
   static DateTime get lastOmerNight =>
       firstOmerNight.add(const Duration(days: 48));
 
-  /// fallback בלבד — כשלא מועברת עיר, מניחים שצאת הכוכבים ב-20:00.
-  static const int nightfallHour = 20;
+  /// 15 בניסן של השנה העברית הנתונה, כתאריך לועזי.
+  /// היום הזה מכיל את ליל 16 בניסן בערבו — תחילת ספירת העומר.
+  static DateTime _firstOmerNightOfHebrewYear(int hebrewYear) {
+    final jc =
+        JewishCalendar.initDate(hebrewYear, JewishDate.NISSAN, 15);
+    final greg = jc.getGregorianCalendar();
+    return DateTime(greg.year, greg.month, greg.day);
+  }
+
+  /// מחזיר את התאריך שבערבו מתחילה ספירת יום 1 בשנה העברית הבאה.
+  /// שימושי לטקסט "ספירת העומר תתחיל ב-...".
+  static DateTime get nextOmerFirstNight {
+    final nowJc = JewishCalendar.fromDateTime(DateTime.now());
+    return _firstOmerNightOfHebrewYear(nowJc.getJewishYear() + 1);
+  }
 
   /// מחשב את יום העומר הנוכחי לפי [now].
   ///
@@ -35,6 +57,7 @@ class OmerService {
   /// - בלי [city]: fallback ל-20:00.
   static OmerDay computeDay({DateTime? now, CityPreset? city}) {
     now ??= DateTime.now();
+    final fOmer = firstOmerNight;
 
     final bool nightStartedToday = city != null
         ? HalachicClock.isAfterTzeit(city, now)
@@ -44,11 +67,11 @@ class OmerService {
         ? DateTime(now.year, now.month, now.day)
         : DateTime(now.year, now.month, now.day - 1);
 
-    if (currentOmerNight.isBefore(firstOmerNight)) {
+    if (currentOmerNight.isBefore(fOmer)) {
       return const OmerDay(beforeOmer: true);
     }
 
-    final diff = currentOmerNight.difference(firstOmerNight).inDays;
+    final diff = currentOmerNight.difference(fOmer).inDays;
     final day = diff + 1;
     if (day > 49) return const OmerDay(afterOmer: true);
     return OmerDay(dayNumber: day);

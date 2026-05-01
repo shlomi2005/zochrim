@@ -36,8 +36,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // מצב עומר
   late OmerDay _omerDay;
   int? _lastCountedDay;
-  int _reminderHour = 20;
-  int _reminderMinute = 15;
 
   // מצב תפילין
   late TefillinDecision _tefillinDecision;
@@ -52,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   OverlayEntry? _overlay;
 
-  // easter egg - 7 לחיצות על הכותרת מוביל לאבחון
+  // easter egg - 7 לחיצות על הכותרת פותחות את מסך החיזוק
   int _headerTapCount = 0;
   DateTime _lastHeaderTap = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -65,8 +63,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _load() async {
     final last = await PreferencesService.getLastCountedDayNumber();
-    final rh = await PreferencesService.getReminderHour();
-    final rm = await PreferencesService.getReminderMinute();
     final name = await ProfileService.getName();
     final city = await ProfileService.getCity();
     final tefillinDone = await PreferencesService.hasDoneTefillinToday();
@@ -74,8 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       _lastCountedDay = last;
-      _reminderHour = rh;
-      _reminderMinute = rm;
       _userName = name;
       _city = city;
       _omerDay = OmerService.computeDay(city: city);
@@ -217,9 +211,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _formatTime(int h, int m) =>
-      "${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}";
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -274,8 +265,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   _candleLightingCard(),
                 ],
 
-                const SizedBox(height: 24),
-                _reminderFooter(),
                 const SizedBox(height: 20),
               ],
             ),
@@ -614,36 +603,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _formatTimeOf(DateTime t) =>
       "${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}";
-
-  Widget _reminderFooter() {
-    return GestureDetector(
-      onTap: _openSettings,
-      child: GlassCard(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        borderRadius: 16,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.alarm,
-                color: AppColors.textMuted, size: 16),
-            const SizedBox(width: 8),
-            Text(
-              _omerDay.isCounting
-                  ? "תזכורת עומר: ${_formatTime(_reminderHour, _reminderMinute)}"
-                  : "הגדרות תזכורות",
-              style: AppFonts.ui(
-                  size: 13,
-                  weight: FontWeight.w500,
-                  color: AppColors.textMuted),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.chevron_left,
-                color: AppColors.textMuted, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ZmanLine {

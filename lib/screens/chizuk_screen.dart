@@ -8,8 +8,11 @@ import '../data/chizuk_milestones.dart';
 import '../data/chizuk_quotes.dart';
 import '../models/chizuk_status.dart';
 import '../services/chizuk_service.dart';
+import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/medal_cabinet.dart';
+import 'chizuk_settings_screen.dart';
 
 /// מסך "חיזוק יומי" — הפיצ'ר החבוי אחרי 7 הקשות על כותרת הבית.
 /// עקרונות: לעולם לא מאפס, שני כפתורים חיוביים, שום בושה.
@@ -31,6 +34,7 @@ class _ChizukScreenState extends State<ChizukScreen>
   ChizukQuote? _shownQuote;
   DateTime? _journeyStart;
   int _daysSinceStart = 1;
+  DateTime _logicalToday = DateTime.now();
 
   late final ConfettiController _confettiCtrl;
   late final AnimationController _pulseCtrl;
@@ -61,8 +65,7 @@ class _ChizukScreenState extends State<ChizukScreen>
   }
 
   Future<void> _load() async {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = await ChizukService.logicalToday();
     // הכניסה הראשונה למסך = יום 1 של המסע. נשמר לתמיד.
     final journeyStart = await ChizukService.ensureJourneyStarted();
     final daysSinceStart = today.difference(journeyStart).inDays + 1;
@@ -84,7 +87,8 @@ class _ChizukScreenState extends State<ChizukScreen>
       _longest = longest;
       _journeyStatuses = statuses;
       _journeyStart = journeyStart;
-      _daysSinceStart = daysSinceStart;
+      _daysSinceStart = daysSinceStart < 1 ? 1 : daysSinceStart;
+      _logicalToday = today;
       _loading = false;
     });
   }
@@ -97,7 +101,7 @@ class _ChizukScreenState extends State<ChizukScreen>
     }
 
     final canCelebrate = status == ChizukStatus.overcame &&
-        await ChizukService.shouldCelebrateToday();
+        await ChizukService.shouldCelebrateOn(_logicalToday);
 
     if (status == ChizukStatus.overcame) {
       if (canCelebrate) {
@@ -106,7 +110,7 @@ class _ChizukScreenState extends State<ChizukScreen>
         _pulseCtrl.forward(from: 0);
         _glowCtrl.forward(from: 0);
         setState(() => _justMarkedOvercame = true);
-        await ChizukService.markCelebratedToday();
+        await ChizukService.markCelebratedOn(_logicalToday);
       } else {
         HapticFeedback.lightImpact();
       }
@@ -114,7 +118,11 @@ class _ChizukScreenState extends State<ChizukScreen>
       HapticFeedback.mediumImpact();
     }
 
-    await ChizukService.markDay(DateTime.now(), status);
+    await ChizukService.markDay(_logicalToday, status);
+    // אחרי סימון — מתזמן מחדש את ההתראות כדי לא לשלוח אם כבר סומן.
+    try {
+      await NotificationService.scheduleAllChizukReminders();
+    } catch (_) {}
 
     // ציטוט חדש רק כשחוגגים, או בשינוי מעוקם-נלחם.
     final shouldRotateQuote =
@@ -148,7 +156,7 @@ class _ChizukScreenState extends State<ChizukScreen>
 
   Future<void> _clearToday() async {
     HapticFeedback.selectionClick();
-    await ChizukService.clearDay(DateTime.now());
+    await ChizukService.clearDay(_logicalToday);
     await _load();
     if (!mounted) return;
     setState(() => _shownQuote = null);
@@ -230,6 +238,16 @@ class _ChizukScreenState extends State<ChizukScreen>
                   Color(0xFFFFD27A),
                   Colors.white,
                 ],
+              ),
+            ),
+            // המדליה הצפה: צמודה לפינה התחתונה־שמאלית, נשארת מעל ההגלגול
+            // ומאפשרת למשתמש להציץ במדליות שצבר.
+            Positioned(
+              left: 16,
+              bottom: MediaQuery.viewPaddingOf(context).bottom + 16,
+              child: FloatingMedalButton(
+                longestRun: _longest,
+                currentRun: _currentRun,
               ),
             ),
           ],
@@ -382,23 +400,44 @@ class _ChizukScreenState extends State<ChizukScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [
-                        AppColors.accentGold.withOpacity(0.5),
-                        AppColors.accentGold.withOpacity(0.0),
-                      ],
+                if (m.medalAsset != null)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.accentGold.withOpacity(0.45),
+                          AppColors.accentGold.withOpacity(0.0),
+                        ],
+                      ),
+                    ),
+                    child: Image.asset(
+                      m.medalAsset!,
+                      width: 180,
+                      height: 180,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.accentGold.withOpacity(0.5),
+                          AppColors.accentGold.withOpacity(0.0),
+                        ],
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.emoji_events,
+                      color: AppColors.accentGold,
+                      size: 64,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.emoji_events,
-                    color: AppColors.accentGold,
-                    size: 64,
-                  ),
-                ),
                 const SizedBox(height: 8),
                 Text(
                   "הגעת ל${m.title}!",
@@ -490,7 +529,20 @@ class _ChizukScreenState extends State<ChizukScreen>
               ),
             ),
           ),
-          const SizedBox(width: 48),
+          IconButton(
+            icon: const Icon(Icons.tune,
+                color: AppColors.textPrimary),
+            tooltip: "הגדרות",
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ChizukSettingsScreen(),
+                ),
+              );
+              if (!mounted) return;
+              await _load();
+            },
+          ),
         ],
       ),
     );
@@ -737,14 +789,12 @@ class _ChizukScreenState extends State<ChizukScreen>
     return "$dayName, ${d.day}.${d.month}";
   }
 
-  /// Friday/Saturday הקרובים האחרונים שעוד לא סומנו ושאינם היום.
+  /// Friday/Saturday הקרובים האחרונים שעוד לא סומנו ושאינם היום (הלוגי).
   /// משמש לבאנר "במוצאי שבת — בא נשלים". מסונן לתחילת המסע.
   List<DateTime> _recentUnmarkedShabbatDays() {
-    final today = DateTime.now();
-    final todayStart = DateTime(today.year, today.month, today.day);
     final out = <DateTime>[];
     for (int i = 1; i <= 7; i++) {
-      final d = todayStart.subtract(Duration(days: i));
+      final d = _logicalToday.subtract(Duration(days: i));
       if (d.weekday != DateTime.friday && d.weekday != DateTime.saturday) {
         continue;
       }
@@ -1008,9 +1058,7 @@ class _ChizukScreenState extends State<ChizukScreen>
         : (_daysSinceStart <= softCap ? _daysSinceStart : softCap);
     final DateTime gridStart;
     if (_daysSinceStart > softCap) {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      gridStart = today.subtract(const Duration(days: softCap - 1));
+      gridStart = _logicalToday.subtract(const Duration(days: softCap - 1));
     } else {
       gridStart = start;
     }
@@ -1071,10 +1119,8 @@ class _ChizukScreenState extends State<ChizukScreen>
   Widget _dayDot(DateTime d) {
     final iso = _isoDate(d);
     final status = _journeyStatuses[iso];
-    final today = DateTime.now();
-    final todayStart = DateTime(today.year, today.month, today.day);
-    final isToday = d.isAtSameMomentAs(todayStart);
-    final isFuture = d.isAfter(todayStart);
+    final isToday = d.isAtSameMomentAs(_logicalToday);
+    final isFuture = d.isAfter(_logicalToday);
 
     Color color;
     if (isFuture) {

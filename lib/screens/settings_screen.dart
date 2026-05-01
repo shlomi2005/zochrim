@@ -10,8 +10,8 @@ import '../services/preferences_service.dart';
 import '../services/profile_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_card.dart';
+import '../widgets/notification_permission_gate.dart';
 import 'about_screen.dart';
-import 'diagnostics_screen.dart';
 import 'privacy_screen.dart';
 
 /// מסך הגדרות - שם משתמש, עיר, שעות תזכורת.
@@ -234,8 +234,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _privacyTile(),
                       const SizedBox(height: 12),
                       _aboutTile(),
-                      const SizedBox(height: 12),
-                      _diagnosticsTile(),
                       const SizedBox(height: 30),
                       _saveButton(),
                       const SizedBox(height: 20),
@@ -378,16 +376,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _toggleTefillin(bool v) async {
+    if (v && !await ensureNotificationPermission(context)) return;
+    if (!mounted) return;
+    setState(() {
+      _tefillinEnabled = v;
+      _dirty = true;
+    });
+  }
+
+  Future<void> _toggleOmer(bool v) async {
+    if (v && !await ensureNotificationPermission(context)) return;
+    if (!mounted) return;
+    setState(() {
+      _omerEnabled = v;
+      _dirty = true;
+    });
+  }
+
+  Future<void> _toggleDafYomi(bool v) async {
+    if (v && !await ensureNotificationPermission(context)) return;
+    if (!mounted) return;
+    setState(() {
+      _dafYomiEnabled = v;
+      _dirty = true;
+    });
+  }
+
+  Future<void> _toggleZman(ZmanType type, bool v) async {
+    if (v && !await ensureNotificationPermission(context)) return;
+    if (!mounted) return;
+    setState(() {
+      _zmanEnabled[type] = v;
+      _dirty = true;
+    });
+  }
+
   Widget _tefillinReminderField() {
     return _reminderRow(
       icon: Icons.wb_sunny_outlined,
       label: "תזכורת תפילין (בוקר)",
       time: _formatTime(_tefillinHour, _tefillinMinute),
       enabled: _tefillinEnabled,
-      onToggle: (v) => setState(() {
-        _tefillinEnabled = v;
-        _dirty = true;
-      }),
+      onToggle: (v) {
+        _toggleTefillin(v);
+      },
       onTap: _pickTefillinTime,
     );
   }
@@ -398,10 +431,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       label: "תזכורת ספירת העומר (ערב)",
       time: _formatTime(_omerHour, _omerMinute),
       enabled: _omerEnabled,
-      onToggle: (v) => setState(() {
-        _omerEnabled = v;
-        _dirty = true;
-      }),
+      onToggle: (v) {
+        _toggleOmer(v);
+      },
       onTap: _pickOmerTime,
     );
   }
@@ -520,10 +552,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Switch(
                   value: enabled,
                   activeColor: AppColors.accentGold,
-                  onChanged: (v) => setState(() {
-                    _zmanEnabled[cfg.type] = v;
-                    _dirty = true;
-                  }),
+                  onChanged: (v) => _toggleZman(cfg.type, v),
                 ),
               ],
             ),
@@ -616,10 +645,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Switch(
                   value: _dafYomiEnabled,
                   activeColor: AppColors.accentGold,
-                  onChanged: (v) => setState(() {
-                    _dafYomiEnabled = v;
-                    _dirty = true;
-                  }),
+                  onChanged: _toggleDafYomi,
                 ),
               ],
             ),
@@ -737,47 +763,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             color: AppColors.textPrimary)),
                     const SizedBox(height: 2),
                     Text("גרסה, מפתח, ורישיונות ספריות",
-                        style: AppFonts.ui(
-                            size: 12, color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_left,
-                  color: AppColors.textMuted, size: 22),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _diagnosticsTile() {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      borderRadius: 16,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const DiagnosticsScreen()),
-        ),
-        child: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Row(
-            children: [
-              const Icon(Icons.bug_report_outlined,
-                  color: AppColors.textMuted, size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("אבחון התראות",
-                        style: AppFonts.ui(
-                            size: 16,
-                            weight: FontWeight.w600,
-                            color: AppColors.textPrimary)),
-                    const SizedBox(height: 2),
-                    Text("לבדיקה במקרה של תקלה",
                         style: AppFonts.ui(
                             size: 12, color: AppColors.textSecondary)),
                   ],
