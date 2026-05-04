@@ -1,7 +1,7 @@
 name: zochrim
 description: "זוכרים - ליווי יומי לחיי מצוות, נוסח עדות המזרח"
 publish_to: 'none'
-version: 1.0.2+6
+version: 1.0.3+7
 
 environment:
   sdk: ^3.8.1

@@ -1,6 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/city_preset.dart';
 import '../models/zman_type.dart';
+import 'tefillin_service.dart';
 
 /// שומר העדפות ומצב מקומי: האם ספרתי היום, שעת תזכורת.
 class PreferencesService {
@@ -119,21 +121,32 @@ class PreferencesService {
     return iso == _isoDate(DateTime.now());
   }
 
-  /// מסמן שהמשתמש הניח תפילין היום. מעדכן גם סטריק (אם אתמול היה סימון - ממשיך).
-  static Future<void> markTefillinDone() async {
+  /// יום החיוב הקודם של תפילין לפני [today] - מדלג על ימים שאין בהם תפילין
+  /// (שבת, יו"ט, חוה"מ למנהג עדות המזרח). שומר על רצף בין ימי שישי וראשון.
+  static DateTime _previousExpectedWearDay(DateTime today, CityPreset city) {
+    var d = today.subtract(const Duration(days: 1));
+    for (var i = 0; i < 30; i++) {
+      final decision = TefillinService.decide(city: city, date: d);
+      if (decision.shouldWearToday) return d;
+      d = d.subtract(const Duration(days: 1));
+    }
+    return d;
+  }
+
+  /// מסמן שהמשתמש הניח תפילין היום. מעדכן גם סטריק.
+  /// [city] משמש כדי לדעת אילו ימים שבאמצע (שבת/יו"ט/חוה"מ) לא שוברים את הרצף.
+  static Future<void> markTefillinDone({required CityPreset city}) async {
     final p = await _prefs;
     final today = DateTime.now();
     final todayIso = _isoDate(today);
     final prevIso = p.getString(_keyTefillinLastDoneIso);
 
-    // חישוב סטריק: אם היום כבר מסומן - לא משנים. אם אתמול - ממשיך. אחרת מתחיל מחדש.
     int streak = p.getInt(_keyTefillinStreak) ?? 0;
     if (prevIso == todayIso) {
       // כבר היום - לא משנים
     } else {
-      final yesterday = today.subtract(const Duration(days: 1));
-      final yesterdayIso = _isoDate(yesterday);
-      if (prevIso == yesterdayIso) {
+      final prevExpectedIso = _isoDate(_previousExpectedWearDay(today, city));
+      if (prevIso == prevExpectedIso) {
         streak += 1;
       } else {
         streak = 1;
@@ -145,18 +158,18 @@ class PreferencesService {
   }
 
   /// מחזיר את הסטריק הנוכחי (כמה ימים ברציפות).
-  static Future<int> getTefillinStreak() async {
+  /// הרצף נשאר חי אם הסימון האחרון הוא היום, או יום החיוב הקודם
+  /// (כלומר ימי דילוג כמו שבת לא שוברים).
+  static Future<int> getTefillinStreak({required CityPreset city}) async {
     final p = await _prefs;
     final streak = p.getInt(_keyTefillinStreak) ?? 0;
     if (streak == 0) return 0;
 
-    // אם לא הונח אתמול או היום - הסטריק נשבר
     final last = p.getString(_keyTefillinLastDoneIso);
     if (last == null) return 0;
     final today = DateTime.now();
-    final todayIso = _isoDate(today);
-    final yesterdayIso = _isoDate(today.subtract(const Duration(days: 1)));
-    if (last == todayIso || last == yesterdayIso) return streak;
+    if (last == _isoDate(today)) return streak;
+    if (last == _isoDate(_previousExpectedWearDay(today, city))) return streak;
     return 0;
   }
 

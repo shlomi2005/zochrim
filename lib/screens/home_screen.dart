@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final name = await ProfileService.getName();
     final city = await ProfileService.getCity();
     final tefillinDone = await PreferencesService.hasDoneTefillinToday();
-    final streak = await PreferencesService.getTefillinStreak();
+    final streak = await PreferencesService.getTefillinStreak(city: city);
 
     setState(() {
       _lastCountedDay = last;
@@ -128,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onTefillinPressed() async {
     try {
       HapticFeedback.mediumImpact();
-      await PreferencesService.markTefillinDone();
+      await PreferencesService.markTefillinDone(city: _city);
       try {
         await NotificationService.cancelTefillinToday();
       } catch (e) {
@@ -139,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     if (!mounted) return;
-    final streak = await PreferencesService.getTefillinStreak();
+    final streak = await PreferencesService.getTefillinStreak(city: _city);
     if (!mounted) return;
 
     setState(() {
